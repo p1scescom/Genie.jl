@@ -23,33 +23,34 @@ If `level` is `error` or `critical` it will also dump the stacktrace onto STDOUT
 ```julia
 ```
 """
+
+warn_logger = Memento.config!("warn", fmt="[{date}|{level}]: {msg}")
+info_logger = Memento.config!("info" , fmt="[{date}|{level}]: {msg}")
+file_logger = getlogger(@__MODULE__)
+
 function log(message::Union{String,Symbol,Number,Exception}, level::Union{String,Symbol} = "info") :: Nothing
   message = string(message)
   level = string(level)
 
   if level == "err" || level == "critical"
+    logger = warn_logger
     level = "warn"
   elseif level == "debug"
+    logger = info_logger
     level = "info"
   else
+    logger = info_logger
     level = "info"
-  end
-
-  root_logger = try
-    Memento.config!(level |> string; fmt="[{date}|{level}]: {msg}")
-  catch ex
-    Memento.config(string(level))
   end
 
   try
     if isfile(log_path())
-      file_logger = getlogger(@__MODULE__)
       setlevel!(file_logger, Genie.config.log_level |> string)
       push!(file_logger, DefaultHandler(log_path(), DefaultFormatter("[{date}|{level}]: {msg}")))
 
       Base.invoke(Core.eval(@__MODULE__, Meta.parse("Memento.$level")), Tuple{typeof(file_logger),typeof(message)}, file_logger, message)
     else
-      Base.invoke(Core.eval(@__MODULE__, Meta.parse("Memento.$level")), Tuple{typeof(root_logger),typeof(message)}, root_logger, message)
+      Base.invoke(Core.eval(@__MODULE__, Meta.parse("Memento.$level")), Tuple{typeof(logger),typeof(message)}, logger, message)
     end
   catch ex
     println(string(ex))
